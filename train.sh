@@ -1,0 +1,1 @@
+python train.py  --max_epochs 1 --data_root /content/images/all/ --train_csv /content/images/all/train.csv --val_csv /content/images/all/val.csv --gpus 1 --auto_select_gpus ----track_grad_norm 2 --check_val_every_n_epoch 1 --weights_summary --default_root_dir ss
