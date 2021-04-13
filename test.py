@@ -10,8 +10,7 @@ def cli_main():
     pl.seed_everything(1234)
     parser = ArgumentParser()
     parser.add_argument('--data_root')
-    parser.add_argument('--train_csv')
-    parser.add_argument('--val_csv')
+    parser.add_argument('--cp_path')
     parser.add_argument('--test_csv')
     parser.add_argument('--batch_size', type=int, default=64)
     parser = pl.Trainer.add_argparse_args(parser)
@@ -19,26 +18,19 @@ def cli_main():
     parser = CSVImageDatasets.add_argparse_args(parser)
     args = parser.parse_args()
     print(args)
-    train_dataset = CSVImageDatasets(args.train_csv, args.data_root, config=args)
-    val_dataset = CSVImageDatasets(args.val_csv, args.data_root, config=args, is_val=True)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size,num_workers=4)
-    args.n_classes = train_dataset.get_num_classes()
-    model = LitClassifyBase(args)
-    checkpoint_callback = ModelCheckpoint(
-        monitor='accuracy',
-        filename='etl-{epoch:02d}-{accuracy:.2f}',
-        save_top_k=3,
-        mode='max',
-        save_last = True
-    )
-    args.checkpoint_callback = checkpoint_callback
-    print(train_dataset.__len__())
-    trainer = pl.Trainer.from_argparse_args(args)
-    trainer.fit(model, train_loader, val_loader)
     test_dataset = CSVImageDatasets(args.test_csv, args.data_root, config=args, is_val=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size,num_workers=4)
-    result = trainer.test(test_dataloaders=test_loader)
+    args.n_classes = test_dataset.get_num_classes()
+    model = LitClassifyBase.load_from_checkpoint(args.cp_path, config=args)
+    # checkpoint_callback = ModelCheckpoint(args.cp_path)
+    # args.resume_from_checkpoint = args.cp_path
+    print(test_dataset.__len__())
+    trainer = pl.Trainer.from_argparse_args(args)
+    # trainer.model = model
+    # trainer = pl.Trainer(callbacks=[checkpoint_callback])
+    # trainer.fit(model)
+    
+    result = trainer.test(model, test_dataloaders=test_loader)
     print(result)
 
 if __name__ == '__main__':

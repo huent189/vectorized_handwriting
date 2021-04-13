@@ -1,1 +1,3 @@
-python train.py --batch_size 320 --max_epochs 40 --benchmark --data_root /content/images/all/ --train_csv /content/images/all/train.csv --val_csv /content/images/all/val.csv --gpus 1 --auto_select_gpus  --default_root_dir ss --log_every_n_steps 100 --log_gpu_memory 1 --deterministic
+python train.py --augment album --batch_size 320 --max_epochs 40 --benchmark --data_root /content/images/all/ --train_csv /content/images/all/train.csv --val_csv /content/images/all/val.csv --gpus 1 --auto_select_gpus  --default_root_dir ss --log_every_n_steps 100 --log_gpu_memory 1 --deterministic
+
+python3 train.py --augment album --batch_size 320 --max_epochs 40 --benchmark --data_root /content/images/all/ --test_csv /content/images/all/test.csv --gpus 1 --auto_select_gpus  --default_root_dir ss --log_every_n_steps 100 --log_gpu_memory 1 --deterministic --cp_path ss/lightning_logs/version_0/checkpoints/etl-epoch=99-accuracy=0.84.ckpt
