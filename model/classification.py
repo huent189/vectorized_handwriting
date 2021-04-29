@@ -40,7 +40,6 @@ class LitClassifyBase(LightningModule):
         preds = self.backbone(x)
         output = torch.argmax(preds, dim=-1).to(x.device)
         # print(output.device, x.device, y.device)
-
         for m in self.metrics:
             self.log(m, self.metrics[m](output, y), on_epoch=True,on_step=False)
         if batch_idx == 0:
