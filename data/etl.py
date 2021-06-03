@@ -10,7 +10,7 @@ import torchvision.transforms
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 from .augmentation import Skeletonization, Binalization
-from utils.vda.api import VDA
+from utils.vda.api import VDA, VDA_TPS
 class CSVImageDatasets(data.Dataset):
     def __init__(self, csv_path, images_folder, config=None, is_val=False):
         self.df = pd.read_csv(csv_path)
@@ -32,11 +32,43 @@ class CSVImageDatasets(data.Dataset):
                             A.Resize(64, 64),
                             ToTensorV2(),
                             ])
+        elif config.augment == 'grid':
+            self.transform = A.Compose(
+                            [
+                                # A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
+                                A.GridDistortion(num_steps=8, p=config.augment_prob),
+                                # A.ElasticTransform(alpha_affine=3, sigma=4, alpha=3),
+                                A.Resize(64, 64),
+                                ToTensorV2(),
+                            ]
+            )
+        elif config.augment == 'elastic':
+            self.transform = A.Compose(
+                            [
+                                # A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
+                                # A.GridDistortion(num_steps=8),
+                                # A.ElasticTransform(alpha_affine=3, sigma=4, alpha=3, p=config.augment_prob),
+                                A.ElasticTransform(alpha_affine=10, sigma=15, alpha=8),
+                                A.Resize(64, 64),
+                                ToTensorV2(),
+                            ]
+            )
+        elif config.augment == 'affine':
+            self.transform = A.Compose(
+                            [
+                                A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=config.augment_prob),
+                                # A.GridDistortion(num_steps=8),
+                                # A.ElasticTransform(alpha_affine=3, sigma=4, alpha=3),
+                                A.Resize(64, 64),
+                                ToTensorV2(),
+                            ]
+            )
         elif config.augment == 'album':
             self.transform = A.Compose(
                             [
-                                A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
-                                A.GridDistortion(num_steps=8),
+                                # A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
+                                # A.GridDistortion(num_steps=8),
+                                A.ElasticTransform(alpha_affine=5, sigma=10, alpha=8),
                                 A.Resize(64, 64),
                                 ToTensorV2(),
                             ]
@@ -66,7 +98,8 @@ class CSVImageDatasets(data.Dataset):
         else:
             parser = ArgumentParser(parents=[parent_parser], add_help=False)
             parser_out = parser
-        parser.add_argument("--augment", type=str, default='none', choices=['none', 'album', 'norm', 'binary'], help="augmentation type")
+        parser.add_argument("--augment", type=str, default='none', choices=['none', 'album', 'norm', 'binary', 'grid', 'affine', 'elastic'], help="augmentation type")
+        parser.add_argument("--augment_prob", type=float, default=0.5)
         return parser_out
 class OfflineAugmentDataset(data.Dataset):
     def __init__(self, origin_path, images_folder, config=None, is_val=False):
@@ -210,12 +243,15 @@ class OnlineVDADataset(data.Dataset):
     def __init__(self, origin_path, images_folder, config=None, is_val=False):
         super().__init__()
         self.config = config
-        self.vda = VDA()
-        self.vda.update_config(config)
+        if config.use_tps:
+            self.vda = VDA_TPS()
+        else:
+            self.vda = VDA()
+            self.vda.update_config(config)
         self.df = pd.read_csv(origin_path)
         # self.augment_df = pd.read_csv(config.augment_path)
-        self.augment_root = config.augment_root
-        self.augment_len = config.augment_len
+        # self.augment_root = config.augment_root
+        # self.augment_len = config.augment_len
         self.images_folder = images_folder
         if config.augment == 'binary':
             self.transform = A.Compose([
@@ -252,8 +288,8 @@ class OnlineVDADataset(data.Dataset):
         # print(filename)
         label = self.df.loc[index, "label_idx"]
         hex_label = self.df.loc[index, "label"]
-        is_real = random.random() < self.config.augment_prob
-        if not is_real:
+        is_fake = random.random() < self.config.augment_prob
+        if is_fake:
             # print('augment')
             image = self.vda.augment_one_image(filename)
         else:
@@ -273,10 +309,12 @@ class OnlineVDADataset(data.Dataset):
         else:
             parser = ArgumentParser(parents=[parent_parser], add_help=False)
             parser_out = parser
-        parser.add_argument("--augment", type=str, default='none', choices=['none', 'album', 'norm', 'binary'], help="augmentation type")
-        parser.add_argument("--augment_prob", type=float, default=0.5)
-        parser.add_argument("--augment_root")
-        parser.add_argument("--augment_len", type=int)
+        # parser.add_argument("--augment", type=str, default='none', choices=['none', 'album', 'norm', 'binary'], help="augmentation type")
+        # parser.add_argument("--augment_prob", type=float, default=0.5)
+        # parser.add_argument("--augment_root")
+        parser.add_argument("--use_tps", action='store_true')
+        # parser.add_argument("--augment_len", type=int)
+
         return parser_out
 if __name__ == '__main__':
     dataset = CSVImageDatasets('/content/images/all/val.csv', '/content/images/all/', transform=[torchvision.transforms.Resize((64,64))])
