@@ -19,8 +19,22 @@ class LitClassifyBase(LightningModule):
         self.backbone = self._get_backbone()
         self.acc = Accuracy()
         self.metrics = {'accuracy' : self.acc}
+        
     def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.backbone.parameters(), lr = self.hparams.lr, betas=[self.hparams.b1, self.hparams.b2])
+        
+        # return {
+        #     'optimizer': optimizer,
+        #     'lr_scheduler': torch.optim.lr_scheduler.StepLR(optimizer, 30, gamma=0.25, last_epoch=-1, verbose=False)
+        # }
+
+        # return {
+        #     'optimizer': optimizer,
+        #     'lr_scheduler': ReduceLROnPlateau(optimizer, ...),
+        #     'monitor': 'metric_to_track',
+        # }
         return torch.optim.Adam(self.backbone.parameters(), lr = self.hparams.lr, betas=[self.hparams.b1, self.hparams.b2])
+
     def _get_backbone(self):
         return ConvNet(self.hparams.n_classes)
     def _cal_loss(self, pred, y):
@@ -30,10 +44,18 @@ class LitClassifyBase(LightningModule):
         x, y,_,_ = batch
         pred = self.backbone(x)
         loss = self._cal_loss(pred, y)
+
+        # # Scheduler lr 
+        # sch = self.lr_scheduler
+        # if self.trainer.is_last_batch:
+        #     sch.step()
+
         self.log('train_loss', loss, on_epoch=True,on_step=True)
         if batch_idx == 0:
             self.logger.experiment.add_figure('training predictions vs. actuals', plot_classes_preds(pred, x, y), self.current_epoch)
         return loss
+
+
     def validation_step(self, batch, batch_idx):
         assert not self.backbone.training
         x, y,_,_ = batch
@@ -67,6 +89,7 @@ class LitClassifyBase(LightningModule):
             parser = ArgumentParser(parents=[parent_parser], add_help=False)
             parser_out = parser
         parser.add_argument("--lr", type=float, default=0.0001, help="adam: learning rate")
+        # parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
         parser.add_argument("--b1", type=float, default=0.9, help="adam: decay of first order momentum of gradient")
         parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of second order momentum of gradient")
         parser.add_argument("--bad_predict", type=str, default='bad_predict.csv')

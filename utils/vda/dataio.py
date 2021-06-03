@@ -7,6 +7,9 @@ MIN_IOU = 0.8
 def combine_mask(im_path, mask_path):
     mask = np.load(mask_path)['arr_0']
     im = cv2.imread(im_path, cv2.IMREAD_GRAYSCALE)
+    assert im is not None, im_path
+    # im = 255 - im
+    im[im > 0] = 255
     assert len(im.shape) == 2, f'im shape was {im.shape}, only support gray image'
     stroke_ids, counts = np.unique(mask, return_counts=True)
     # print(mask['arr_0'])
@@ -27,17 +30,18 @@ def remove_contours(im, cnt):
     im[mask > 0] = 0
     return im
 def get_non_border_cnt(im):
+    noise_border = np.zeros_like(im)
     h, w = im.shape
-    contours, hierarchy = cv2.findContours(im, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(im, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     text_cnt = []
     for i,cnt in enumerate(contours):
         rect = cv2.minAreaRect(cnt)
         if rect[0][0] < w * 0.1  or rect[0][0] > w * 0.9 or rect[0][1] < h * 0.1  or rect[0][1] > h * 0.9:
-            tmp = remove_contours(im, cnt)
+            tmp = merge_contour(im, noise_border, cnt)
         else:
             text_cnt.append([cnt, rect])
         # return False
-    return text_cnt
+    return text_cnt, noise_border
 def merge_contour(src, trg, cnt):
     mask = np.zeros_like(src)
     cv2.drawContours(mask, [cnt], -1, 255, -1)
@@ -47,6 +51,10 @@ def merge_contour(src, trg, cnt):
 def preprocess_strokes(strokes):
     # remove border contour
     im_cnts = [get_non_border_cnt(s) for s in strokes]
+    # cv2.imwrite('debug_output/tmp2.png',strokes[1])
+    noise_cnts =  [x[1] for x in im_cnts]
+    im_cnts = [x[0] for x in im_cnts]
+    noise_im = merge_strokes(noise_cnts)
     # clasify good and bad contour
     goods = []
     bads = []
@@ -62,10 +70,10 @@ def preprocess_strokes(strokes):
             max_cnt = None
             for cnt in s_cnts:
                 area = cal_min_rect_area(cnt[1])
-                if area >= max_area:
-                    max_area = area
+                if area > max_area:
                     if max_cnt is not None:
                         bads.append(max_cnt + [i])
+                    max_area = area
                     max_cnt = cnt
             if max_area < MIN_AREA:
                 bads.append(max_cnt + [i])
@@ -105,21 +113,23 @@ def preprocess_strokes(strokes):
                 merged = True
                 continue
             elif g[-1] == b[-1]:
-                if rect_distance(g[1], b[1]) < 5 or cal_min_rect_area(b[1]) / cal_min_rect_area(g[1]) > 0.7:
+                print('same', g[-1], cal_min_rect_area(b[1]), cal_min_rect_area(g[1]))
+                if rect_distance(g[1], b[1]) < 5 or cal_min_rect_area(b[1]) / cal_min_rect_area(g[1]) > 0.5 or cal_min_rect_area(b[1]) > 20:
                     merged = True
                     should_merge_after.append([i, j])
                     continue
                 
-        # assert merged, b[-1]
+        assert merged, b[-1]
    
     # update bouding box + contours
     for bg_pair in should_merge_after:
+        i, j = bg_pair
         new_cnt = np.concatenate([goods[j][0], bads[i][0]])
         goods[j][0] = new_cnt
         goods[j][1] = cv2.minAreaRect(new_cnt)
     good_idx = [b[-1] for b in goods]
     stroke_cnts = [b[:-1] for b in goods]
-    return [strokes[i] for i in good_idx], stroke_cnts
+    return [strokes[i] for i in good_idx], stroke_cnts, noise_im
 def merge_strokes(strokes):
     merged_im = np.maximum.reduce(strokes)
     return merged_im
